@@ -83,7 +83,7 @@ def check_lul(page, shift, target_date):
                 performer = cells[6]
                 if equip in data:
                     if not any(e["shiftDetail"] == shift_detail and e["performedBy"] == performer for e in data[equip]):
-                        data[equip].push({"shiftDetail": shift_detail, "performedBy": performer})
+                        data[equip].append({"shiftDetail": shift_detail, "performedBy": performer})
 
         next_btn = page.query_selector(".next:not(.disabled) a")
         if next_btn:
