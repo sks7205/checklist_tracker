@@ -1,0 +1,42 @@
+name: Shift Checklist Automation
+
+on:
+  schedule:
+    # 06:30 IST (C Shift) -> 01:00 UTC
+    - cron: '0 1 * * *'
+    # 14:30 IST (A Shift) -> 09:00 UTC
+    - cron: '0 9 * * *'
+    # 22:30 IST (B Shift) -> 17:00 UTC
+    - cron: '0 17 * * *'
+  workflow_dispatch:
+    inputs:
+      shift:
+        description: 'Shift to check (A, B, or C)'
+        required: false
+        default: ''
+
+jobs:
+  run-checklist:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+
+      - name: Run checklist script
+        run: |
+          if [ -n "${{ github.event.inputs.shift }}" ]; then
+            python script.py --shift ${{ github.event.inputs.shift }}
+          else
+            python script.py
+          fi
