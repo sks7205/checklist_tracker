@@ -2,16 +2,26 @@ name: Shift Checklist Automation
 
 on:
   schedule:
-    # 06:30 IST (C Shift) -> 01:00 UTC
+    # 06:30 IST (C Shift End) -> 01:00 UTC
     - cron: '0 1 * * *'
-    # 14:30 IST (A Shift) -> 09:00 UTC
+    # 14:30 IST (A Shift End) -> 09:00 UTC
     - cron: '0 9 * * *'
-    # 22:30 IST (B Shift) -> 17:00 UTC
+    # 22:30 IST (B Shift End) -> 17:00 UTC
     - cron: '0 17 * * *'
+
   workflow_dispatch:
     inputs:
       shift:
-        description: 'Shift to check (A, B, or C)'
+        description: 'Select Shift (A, B, or C)'
+        required: true
+        type: choice
+        options:
+          - A
+          - B
+          - C
+        default: 'A'
+      date:
+        description: 'Date in DD/MM/YYYY format (Leave empty for default)'
         required: false
         default: ''
 
@@ -41,8 +51,11 @@ jobs:
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
+          ARGS=""
           if [ -n "${{ github.event.inputs.shift }}" ]; then
-            python script.py --shift ${{ github.event.inputs.shift }}
-          else
-            python script.py
+            ARGS="$ARGS --shift ${{ github.event.inputs.shift }}"
           fi
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            ARGS="$ARGS --date ${{ github.event.inputs.date }}"
+          fi
+          python script.py $ARGS
