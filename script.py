@@ -12,7 +12,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 LOGIN_URL = "https://vedantaconnect.com/NEWMES/Account/Login?ReturnUrl=%2fNEWMES%2fHome%2fIndex"
 BASE_URL = "https://vedantaconnect.com/NEWMES/Rodding2/Rodding2/LULChecklistIndex"
 USER_ID = os.getenv("MES_USER_ID", "215502")
-PASSWORD = os.getenv("MES_PASSWORD", "crystal$84goldenwolf")
+PASSWORD = os.getenv("MES_PASSWORD", "Plmoknijbuhv@6543")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8435743171:AAGijQqbqgqAAQ__lTZmeql612K64NWXpZo")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "1549335982")
 GH_PAT = os.getenv("GH_PAT", "")
