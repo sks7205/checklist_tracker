@@ -361,7 +361,7 @@ def run_automation(selected_shift=None, selected_date=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Shift Checklist Automation")
     parser.add_argument("--shift", choices=["A", "B", "C"], help="Force specific shift")
-    parser.add_argument("--date", help="Custom Date (DD/MM/YYYY)")
+    parser.add_argument("--date", help="Custom Date in DD/MM/YYYY format")
     args = parser.parse_args()
 
     run_automation(selected_shift=args.shift, selected_date=args.date)
