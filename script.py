@@ -59,6 +59,8 @@ def get_last_telegram_update_id():
         pass
     return 0
 
+CF_WORKER_URL = "https://checklist-telegram-bot.santanusahoo99.workers.dev"  # Replace with your worker URL
+
 def ask_and_wait_for_new_password(page=None):
     if page:
         try:
@@ -66,6 +68,12 @@ def ask_and_wait_for_new_password(page=None):
             send_telegram_photo("login_failed.png", caption="⚠️ <b>MES Login Failed / Password Expired</b>")
         except Exception:
             pass
+
+    # 1. Temporarily remove webhook so getUpdates works inside this script
+    try:
+        requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook", timeout=10)
+    except Exception as e:
+        print(f"Warning dropping webhook: {e}")
 
     send_telegram(
         "⚠️ <b>MES PASSWORD EXPIRED / LOGIN FAILED</b>\n\n"
@@ -77,9 +85,12 @@ def ask_and_wait_for_new_password(page=None):
     last_update_id = get_last_telegram_update_id()
     print("Waiting for new password from Telegram...")
 
+    new_password = None
     start_time = time.time()
+    
+    # 2. Poll for your reply
     while time.time() - start_time < 600:
-        time.sleep(5)
+        time.sleep(4)
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates?offset={last_update_id + 1}"
         try:
             res = requests.get(url, timeout=15).json()
@@ -92,13 +103,24 @@ def ask_and_wait_for_new_password(page=None):
 
                     if sender_id == str(CHAT_ID) and text and not text.startswith("/"):
                         print("Received new password from Telegram.")
-                        return text
+                        new_password = text
+                        break
+            if new_password:
+                break
         except Exception as e:
             print(f"Error checking Telegram updates: {e}")
-            
-    send_telegram("❌ Timeout waiting for new password. Automation cancelled.")
-    return None
 
+    # 3. Restore the Cloudflare webhook for /check triggers
+    try:
+        requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook?url={CF_WORKER_URL}", timeout=10)
+    except Exception as e:
+        print(f"Warning resetting webhook: {e}")
+
+    if not new_password:
+        send_telegram("❌ Timeout waiting for new password. Automation cancelled.")
+        return None
+
+    return new_password
 def update_password_in_repo(new_password):
     try:
         with open("script.py", "r", encoding="utf-8") as f:
