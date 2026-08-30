@@ -2,11 +2,11 @@ name: Shift Checklist Automation
 
 on:
   schedule:
-    # 06:30 IST (C Shift End) -> 01:00 UTC
+    # 06:30 AM IST (C Shift) -> 01:00 UTC
     - cron: '0 1 * * *'
-    # 14:30 IST (A Shift End) -> 09:00 UTC
+    # 02:30 PM IST (A Shift) -> 09:00 UTC
     - cron: '0 9 * * *'
-    # 22:30 IST (B Shift End) -> 17:00 UTC
+    # 10:30 PM IST (B Shift) -> 17:00 UTC
     - cron: '0 17 * * *'
 
   workflow_dispatch:
@@ -47,15 +47,29 @@ jobs:
           pip install playwright requests
           playwright install --with-deps chromium
 
-      - name: Run checklist script
+      - name: Execute Shift Checklist
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          ARGS=""
+          # 1. If triggered manually (or via Cloudflare)
           if [ -n "${{ github.event.inputs.shift }}" ]; then
-            ARGS="$ARGS --shift ${{ github.event.inputs.shift }}"
+            SHIFT="${{ github.event.inputs.shift }}"
+            DATE_ARG=""
+            if [ -n "${{ github.event.inputs.date }}" ]; then
+              DATE_ARG="--date ${{ github.event.inputs.date }}"
+            fi
+            python script.py --shift $SHIFT $DATE_ARG
+
+          # 2. If triggered automatically on schedule (UTC hours: 01:00=C, 09:00=A, 17:00=B)
+          else
+            UTC_HOUR=$(date -u +%H)
+            if [ "$UTC_HOUR" -eq "01" ] || [ "$UTC_HOUR" -eq "1" ]; then
+              python script.py --shift C
+            elif [ "$UTC_HOUR" -eq "09" ] || [ "$UTC_HOUR" -eq "9" ]; then
+              python script.py --shift A
+            elif [ "$UTC_HOUR" -eq "17" ]; then
+              python script.py --shift B
+            else
+              python script.py
+            fi
           fi
-          if [ -n "${{ github.event.inputs.date }}" ]; then
-            ARGS="$ARGS --date ${{ github.event.inputs.date }}"
-          fi
-          python script.py $ARGS
