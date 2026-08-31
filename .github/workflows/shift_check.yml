@@ -26,7 +26,11 @@ on:
         default: ''
 
 jobs:
-  run-checklist:
+  # -------------------------------------------------------------
+  # Job 1: Manual / Cloudflare Worker Trigger
+  # -------------------------------------------------------------
+  manual-run:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -47,29 +51,60 @@ jobs:
           pip install playwright requests
           playwright install --with-deps chromium
 
-      - name: Execute Shift Checklist
+      - name: Run Checklist
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          # 1. If triggered manually (or via Cloudflare)
-          if [ -n "${{ github.event.inputs.shift }}" ]; then
-            SHIFT="${{ github.event.inputs.shift }}"
-            DATE_ARG=""
-            if [ -n "${{ github.event.inputs.date }}" ]; then
-              DATE_ARG="--date ${{ github.event.inputs.date }}"
-            fi
-            python script.py --shift $SHIFT $DATE_ARG
+          ARGS="--shift ${{ github.event.inputs.shift }}"
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            ARGS="$ARGS --date ${{ github.event.inputs.date }}"
+          fi
+          python script.py $ARGS
 
-          # 2. If triggered automatically on schedule (UTC hours: 01:00=C, 09:00=A, 17:00=B)
+  # -------------------------------------------------------------
+  # Job 2: Scheduled Automatic Runs (Exact Shift Mapping)
+  # -------------------------------------------------------------
+  scheduled-run:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT || github.token }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install playwright requests
+          playwright install --with-deps chromium
+
+      - name: Determine Shift & Run
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          # Strip leading zeros and check time range (handles 0-45 min GitHub scheduler delays)
+          UTC_HOUR=$((10#$(date -u +%H)))
+          
+          echo "Current UTC Hour: $UTC_HOUR"
+
+          if [ "$UTC_HOUR" -ge 0 ] && [ "$UTC_HOUR" -le 4 ]; then
+            echo "Executing Scheduled C Shift..."
+            python script.py --shift C
+          elif [ "$UTC_HOUR" -ge 8 ] && [ "$UTC_HOUR" -le 12 ]; then
+            echo "Executing Scheduled A Shift..."
+            python script.py --shift A
+          elif [ "$UTC_HOUR" -ge 16 ] && [ "$UTC_HOUR" -le 20 ]; then
+            echo "Executing Scheduled B Shift..."
+            python script.py --shift B
           else
-            UTC_HOUR=$(date -u +%H)
-            if [ "$UTC_HOUR" -eq "01" ] || [ "$UTC_HOUR" -eq "1" ]; then
-              python script.py --shift C
-            elif [ "$UTC_HOUR" -eq "09" ] || [ "$UTC_HOUR" -eq "9" ]; then
-              python script.py --shift A
-            elif [ "$UTC_HOUR" -eq "17" ]; then
-              python script.py --shift B
-            else
-              python script.py
-            fi
+            echo "Fallback check based on script logic..."
+            python script.py
           fi
