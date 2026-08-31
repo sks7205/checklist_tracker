@@ -124,7 +124,3 @@ jobs:
           import subprocess
           subprocess.run(['python', 'script.py', '--shift', shift], check=True)
           "
-          else
-            echo "Fallback check based on script logic..."
-            python script.py
-          fi
