@@ -2,12 +2,12 @@ name: Shift Checklist Automation
 
 on:
   schedule:
-    # 06:30 AM IST (C Shift) -> 01:00 UTC
-    - cron: '0 1 * * *'
-    # 02:30 PM IST (A Shift) -> 09:00 UTC
-    - cron: '0 9 * * *'
-    # 10:30 PM IST (B Shift) -> 17:00 UTC
-    - cron: '0 17 * * *'
+    # C Shift (Starts VM at 06:29 AM IST -> Triggers at 06:30 AM IST)
+    - cron: '59 0 * * *'
+    # A Shift (Starts VM at 02:29 PM IST -> Triggers at 02:30 PM IST)
+    - cron: '59 8 * * *'
+    # B Shift (Starts VM at 10:29 PM IST -> Triggers at 10:30 PM IST)
+    - cron: '59 16 * * *'
 
   workflow_dispatch:
     inputs:
@@ -27,7 +27,7 @@ on:
 
 jobs:
   # -------------------------------------------------------------
-  # Job 1: Manual / Cloudflare Worker Trigger
+  # Job 1: Manual / Cloudflare Worker Trigger (Runs Immediately)
   # -------------------------------------------------------------
   manual-run:
     if: github.event_name == 'workflow_dispatch'
@@ -62,7 +62,7 @@ jobs:
           python script.py $ARGS
 
   # -------------------------------------------------------------
-  # Job 2: Scheduled Automatic Runs (Exact Shift Mapping)
+  # Job 2: Scheduled Runs (Pre-warms 1 Min Early & Syncs to Exact Time)
   # -------------------------------------------------------------
   scheduled-run:
     if: github.event_name == 'schedule'
@@ -81,29 +81,49 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install dependencies (Pre-warming Environment)
         run: |
           pip install playwright requests
           playwright install --with-deps chromium
 
-      - name: Determine Shift & Run
+      - name: Sync to Exact Shift Time & Execute
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          # Strip leading zeros and check time range (handles 0-45 min GitHub scheduler delays)
-          UTC_HOUR=$((10#$(date -u +%H)))
-          
-          echo "Current UTC Hour: $UTC_HOUR"
+          python -c "
+          import time
+          from datetime import datetime, timezone, timedelta
 
-          if [ "$UTC_HOUR" -ge 0 ] && [ "$UTC_HOUR" -le 4 ]; then
-            echo "Executing Scheduled C Shift..."
-            python script.py --shift C
-          elif [ "$UTC_HOUR" -ge 8 ] && [ "$UTC_HOUR" -le 12 ]; then
-            echo "Executing Scheduled A Shift..."
-            python script.py --shift A
-          elif [ "$UTC_HOUR" -ge 16 ] && [ "$UTC_HOUR" -le 20 ]; then
-            echo "Executing Scheduled B Shift..."
-            python script.py --shift B
+          IST = timezone(timedelta(hours=5, minutes=30))
+          now = datetime.now(IST)
+          print(f'Runner ready at: {now.strftime(\"%H:%M:%S\")} IST')
+
+          # Determine target shift and exact trigger target
+          if now.hour == 6 or (now.hour == 5 and now.minute >= 55):
+              shift = 'C'
+              target_hour, target_min = 6, 30
+          elif now.hour == 14 or (now.hour == 13 and now.minute >= 55):
+              shift = 'A'
+              target_hour, target_min = 14, 30
+          elif now.hour == 22 or (now.hour == 21 and now.minute >= 55):
+              shift = 'B'
+              target_hour, target_min = 22, 30
+          else:
+              shift = 'A'
+              target_hour, target_min = now.hour, now.minute
+
+          target_time = now.replace(hour=target_hour, minute=target_min, second=0, microsecond=0)
+          
+          # If runner initialized early, wait for the exact scheduled second
+          wait_seconds = (target_time - datetime.now(IST)).total_seconds()
+          if wait_seconds > 0:
+              print(f'Waiting {wait_seconds:.2f}s for exact trigger time ({target_hour:02d}:{target_min:02d}:00 IST)...')
+              time.sleep(wait_seconds)
+
+          print(f'Triggering {shift} Shift Checklist at: {datetime.now(IST).strftime(\"%H:%M:%S\")} IST')
+          import subprocess
+          subprocess.run(['python', 'script.py', '--shift', shift], check=True)
+          "
           else
             echo "Fallback check based on script logic..."
             python script.py
