@@ -452,8 +452,5 @@ if __name__ == "__main__":
     parser.add_argument("--date", help="Custom Date in DD/MM/YYYY format")
     args = parser.parse_args()
 
-    # Check if a command was sent in Telegram
-    telegram_shift = check_for_telegram_triggers()
-    chosen_shift = args.shift or telegram_shift
-
-    run_automation(selected_shift=chosen_shift, selected_date=args.date)
+    # Absolute priority to command line arguments passed from YAML / Cloudflare
+    run_automation(selected_shift=args.shift, selected_date=args.date)
