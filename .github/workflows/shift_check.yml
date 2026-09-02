@@ -1,13 +1,15 @@
 name: Shift Checklist Automation
 
 on:
+  # Backup only: GitHub's native schedule can be delayed by minutes to
+  # hours under load, so this exists purely as a fallback in case the
+  # Cloudflare Worker's cron-triggered workflow_dispatch call fails.
+  # Kept 10 minutes behind the real target so it doesn't double-run
+  # under normal conditions.
   schedule:
-    # C Shift (06:30 AM IST) -> 01:00 UTC
-    - cron: '0 1 * * *'
-    # A Shift (02:30 PM IST) -> 09:00 UTC
-    - cron: '0 9 * * *'
-    # B Shift (10:30 PM IST) -> 17:00 UTC
-    - cron: '0 17 * * *'
+    - cron: '9 1 * * *'   # C shift fallback, 6:39 AM IST
+    - cron: '9 9 * * *'   # A shift fallback, 2:39 PM IST
+    - cron: '9 17 * * *'  # B shift fallback, 10:39 PM IST
 
   workflow_dispatch:
     inputs:
@@ -27,7 +29,10 @@ on:
 
 jobs:
   # -------------------------------------------------------------
-  # Job 1: Manual or Cloudflare Worker Trigger
+  # Job 1: Manual / Cloudflare Worker Trigger (Runs Immediately)
+  # The Worker's cron calls this same workflow_dispatch endpoint at the
+  # exact shift time, passing the correct shift - same path your /check
+  # Telegram command already uses.
   # -------------------------------------------------------------
   manual-run:
     if: github.event_name == 'workflow_dispatch'
@@ -51,7 +56,7 @@ jobs:
           pip install playwright requests
           playwright install --with-deps chromium
 
-      - name: Run Manual Checklist
+      - name: Run Checklist
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
@@ -62,7 +67,8 @@ jobs:
           python script.py $ARGS
 
   # -------------------------------------------------------------
-  # Job 2: Scheduled Shift Runs (Explicit Shift Mapping)
+  # Job 2: Scheduled Runs (Fallback only - runs 9-10 min after target,
+  # in case the Cloudflare Worker's dispatch above didn't fire)
   # -------------------------------------------------------------
   scheduled-run:
     if: github.event_name == 'schedule'
@@ -81,25 +87,62 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install dependencies (Pre-warming Environment)
         run: |
           pip install playwright requests
           playwright install --with-deps chromium
 
-      - name: Run Scheduled C Shift (06:30 AM IST)
-        if: github.event.schedule == '0 1 * * *'
+      - name: Sync to Exact Shift Time & Execute
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
-        run: python script.py --shift C
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          python -c "
+          import os, time, subprocess
+          from datetime import datetime, timezone, timedelta
 
-      - name: Run Scheduled A Shift (02:30 PM IST)
-        if: github.event.schedule == '0 9 * * *'
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-        run: python script.py --shift A
+          IST = timezone(timedelta(hours=5, minutes=30))
+          now = datetime.now(IST)
+          schedule = os.getenv('SCHEDULE', '')
+          print(f'Runner ready at: {now.strftime(\"%H:%M:%S\")} IST | Cron matched: {schedule!r}')
 
-      - name: Run Scheduled B Shift (10:30 PM IST)
-        if: github.event.schedule == '0 17 * * *'
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-        run: python script.py --shift B
+          # Determine shift from the cron expression that actually fired,
+          # NOT from the current wall-clock hour. A delayed runner can land
+          # outside every expected hour window, which used to silently
+          # default to Shift A regardless of which cron triggered it.
+          schedule_map = {
+              '9 1 * * *':  ('C', 6, 30),
+              '9 9 * * *':  ('A', 14, 30),
+              '9 17 * * *': ('B', 22, 30),
+          }
+
+          if schedule in schedule_map:
+              shift, target_hour, target_min = schedule_map[schedule]
+          else:
+              # Fallback only if the schedule context is missing entirely
+              hour = now.hour
+              if 5 <= hour < 13:
+                  shift, target_hour, target_min = 'C', now.hour, now.minute
+              elif 13 <= hour < 21:
+                  shift, target_hour, target_min = 'A', now.hour, now.minute
+              else:
+                  shift, target_hour, target_min = 'B', now.hour, now.minute
+              print(f'WARNING: schedule context not recognized ({schedule!r}); inferred shift {shift} from current time.')
+
+          target_time = now.replace(hour=target_hour, minute=target_min, second=0, microsecond=0)
+
+          # Only wait if we're a little early (normal case). If the runner
+          # was delayed and we're already past the target, skip waiting
+          # entirely and run immediately with the correct shift.
+          wait_seconds = (target_time - datetime.now(IST)).total_seconds()
+          if 0 < wait_seconds <= 120:
+              print(f'Waiting {wait_seconds:.2f}s for exact trigger time ({target_hour:02d}:{target_min:02d}:00 IST)...')
+              time.sleep(wait_seconds)
+          elif wait_seconds > 120:
+              print(f'Target time is unexpectedly far ahead ({wait_seconds:.0f}s) - running immediately without waiting.')
+          else:
+              print(f'Runner delayed by {-wait_seconds:.0f}s past target - running immediately for {shift} shift.')
+
+          print(f'Triggering {shift} Shift Checklist at: {datetime.now(IST).strftime(\"%H:%M:%S\")} IST')
+          subprocess.run(['python', 'script.py', '--shift', shift], check=True)
+          "
