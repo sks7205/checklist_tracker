@@ -7,7 +7,7 @@ on:
   # Kept 10 minutes behind the real target so it doesn't double-run
   # under normal conditions.
   schedule:
-    - cron: '0 23 * * *'   # C shift fallback, 6:30 AM IST
+    - cron: '52 23 * * *'   # C shift fallback, 6:30 AM IST
     - cron: '30 04 * * *'   # A shift fallback, 2:30 PM IST
     - cron: '15 14 * * *'  # B shift fallback, 10:30 PM IST
 
@@ -111,7 +111,7 @@ jobs:
           # outside every expected hour window, which used to silently
           # default to Shift A regardless of which cron triggered it.
           schedule_map = {
-              '0 23 * * *':  ('C', 6, 30),
+              '52 23 * * *':  ('C', 6, 30),
               '30 04 * * *':  ('A', 14, 30),
               '15 14 * * *': ('B', 22, 30),
           }
