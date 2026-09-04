@@ -59,7 +59,7 @@ def get_last_telegram_update_id():
         pass
     return 0
 
-CF_WORKER_URL = "https://checklist-telegram-bot.santanusahoo99.workers.dev"  # Replace with your worker URL
+CF_WORKER_URL = "https://checklist-telegram-bot.santanusahoo99.workers.dev/check"  # Telegram webhook URL must point to the /check route
 
 def ask_and_wait_for_new_password(page=None):
     if page:

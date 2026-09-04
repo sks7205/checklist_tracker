@@ -1,0 +1,10 @@
+name = "checklist-telegram-bot"
+main = "src/index.js"
+compatibility_date = "2026-09-04"
+
+[triggers]
+crons = [
+  "0 1 * * *",   # C shift -> 06:30 AM IST
+  "0 9 * * *",   # A shift -> 02:30 PM IST
+  "0 17 * * *"   # B shift -> 10:30 PM IST
+]
